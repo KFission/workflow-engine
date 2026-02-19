@@ -15,8 +15,7 @@ import '@xyflow/react/dist/style.css';
 import { nodeTypes } from '../components/nodes';
 import Sidebar from '../components/sidebar/Sidebar';
 import Toolbar from '../components/toolbar/Toolbar';
-import { db } from '../db/db';
-import { v4 as uuidv4 } from 'uuid';
+import { fetchWorkflow, createWorkflow, updateWorkflow } from '../api/workflows';
 
 let nodeId = 0;
 const getNodeId = () => `node_${nodeId++}`;
@@ -33,19 +32,16 @@ function WorkflowEditorInner() {
 
   useEffect(() => {
     if (id) {
-      db.workflows.get(id).then((workflow) => {
-        if (workflow) {
-          setWorkflowId(workflow.id);
-          setWorkflowName(workflow.name);
-          setNodes(workflow.nodes || []);
-          setEdges(workflow.edges || []);
-          // Ensure nodeId counter is higher than any existing node
-          const maxId = (workflow.nodes || []).reduce((max, n) => {
-            const num = parseInt(n.id.replace('node_', ''), 10);
-            return isNaN(num) ? max : Math.max(max, num);
-          }, 0);
-          nodeId = maxId + 1;
-        }
+      fetchWorkflow(id).then((workflow) => {
+        setWorkflowId(workflow.id);
+        setWorkflowName(workflow.name);
+        setNodes(workflow.nodes || []);
+        setEdges(workflow.edges || []);
+        const maxId = (workflow.nodes || []).reduce((max, n) => {
+          const num = parseInt(n.id.replace('node_', ''), 10);
+          return isNaN(num) ? max : Math.max(max, num);
+        }, 0);
+        nodeId = maxId + 1;
       });
     }
   }, [id, setNodes, setEdges]);
@@ -84,28 +80,16 @@ function WorkflowEditorInner() {
   );
 
   const onSave = useCallback(async () => {
-    const now = new Date().toISOString();
-    const wfId = workflowId || uuidv4();
+    const payload = { name: workflowName, nodes, edges };
 
-    const workflow = {
-      id: wfId,
-      name: workflowName,
-      nodes,
-      edges,
-      updatedAt: now,
-    };
-
-    if (!workflowId) {
-      workflow.createdAt = now;
+    if (workflowId) {
+      await updateWorkflow(workflowId, payload);
+    } else {
+      const created = await createWorkflow(payload);
+      setWorkflowId(created.id);
+      navigate(`/editor/${created.id}`, { replace: true });
     }
-
-    await db.workflows.put(workflow);
-    setWorkflowId(wfId);
-
-    if (!id) {
-      navigate(`/editor/${wfId}`, { replace: true });
-    }
-  }, [workflowId, workflowName, nodes, edges, id, navigate]);
+  }, [workflowId, workflowName, nodes, edges, navigate]);
 
   const onClear = useCallback(() => {
     setNodes([]);

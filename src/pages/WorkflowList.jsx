@@ -1,17 +1,20 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { fetchWorkflows, deleteWorkflow } from '../api/workflows';
 
 export default function WorkflowList() {
   const navigate = useNavigate();
-  const workflows = useLiveQuery(() =>
-    db.workflows.orderBy('updatedAt').reverse().toArray(),
-  );
+  const [workflows, setWorkflows] = useState(undefined);
+
+  useEffect(() => {
+    fetchWorkflows().then(setWorkflows);
+  }, []);
 
   const onDelete = async (id, e) => {
     e.stopPropagation();
     if (window.confirm('Delete this workflow?')) {
-      await db.workflows.delete(id);
+      await deleteWorkflow(id);
+      setWorkflows((prev) => prev.filter((wf) => wf.id !== id));
     }
   };
 
@@ -43,7 +46,7 @@ export default function WorkflowList() {
                 <span>{(wf.edges || []).length} edges</span>
               </div>
               <div className="workflow-card-date">
-                Updated: {new Date(wf.updatedAt).toLocaleString()}
+                Updated: {new Date(wf.updated_at).toLocaleString()}
               </div>
               <button
                 className="workflow-card-delete"
