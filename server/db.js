@@ -1,11 +1,13 @@
-import pg from 'pg';
+import Database from 'better-sqlite3';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const pool = new pg.Pool({
-  host: process.env.PGHOST || 'localhost',
-  port: parseInt(process.env.PGPORT || '5432', 10),
-  database: process.env.PGDATABASE || 'workflow_engine',
-  user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD || 'postgres',
-});
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'workflow_engine.db');
 
-export default pool;
+const db = new Database(dbPath);
+
+// Enable WAL mode for better concurrent read performance
+db.pragma('journal_mode = WAL');
+
+export default db;

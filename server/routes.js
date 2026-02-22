@@ -1,16 +1,24 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import pool from './db.js';
+import db from './db.js';
 
 const router = Router();
 
+function parseWorkflow(row) {
+  return {
+    ...row,
+    nodes: JSON.parse(row.nodes),
+    edges: JSON.parse(row.edges),
+  };
+}
+
 // GET /api/workflows — list all workflows
-router.get('/workflows', async (req, res) => {
+router.get('/workflows', (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT id, name, nodes, edges, created_at, updated_at FROM workflows ORDER BY updated_at DESC',
-    );
-    res.json(rows);
+    const rows = db
+      .prepare('SELECT id, name, nodes, edges, created_at, updated_at FROM workflows ORDER BY updated_at DESC')
+      .all();
+    res.json(rows.map(parseWorkflow));
   } catch (err) {
     console.error('GET /workflows error:', err);
     res.status(500).json({ error: 'Failed to fetch workflows' });
@@ -18,16 +26,15 @@ router.get('/workflows', async (req, res) => {
 });
 
 // GET /api/workflows/:id — get a single workflow
-router.get('/workflows/:id', async (req, res) => {
+router.get('/workflows/:id', (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT id, name, nodes, edges, created_at, updated_at FROM workflows WHERE id = $1',
-      [req.params.id],
-    );
-    if (rows.length === 0) {
+    const row = db
+      .prepare('SELECT id, name, nodes, edges, created_at, updated_at FROM workflows WHERE id = ?')
+      .get(req.params.id);
+    if (!row) {
       return res.status(404).json({ error: 'Workflow not found' });
     }
-    res.json(rows[0]);
+    res.json(parseWorkflow(row));
   } catch (err) {
     console.error('GET /workflows/:id error:', err);
     res.status(500).json({ error: 'Failed to fetch workflow' });
@@ -35,17 +42,19 @@ router.get('/workflows/:id', async (req, res) => {
 });
 
 // POST /api/workflows — create a new workflow
-router.post('/workflows', async (req, res) => {
+router.post('/workflows', (req, res) => {
   try {
     const { name, nodes, edges } = req.body;
     const id = uuidv4();
-    const { rows } = await pool.query(
-      `INSERT INTO workflows (id, name, nodes, edges)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, nodes, edges, created_at, updated_at`,
-      [id, name || 'Untitled Workflow', JSON.stringify(nodes || []), JSON.stringify(edges || [])],
-    );
-    res.status(201).json(rows[0]);
+    const now = new Date().toISOString();
+
+    db.prepare(
+      `INSERT INTO workflows (id, name, nodes, edges, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(id, name || 'Untitled Workflow', JSON.stringify(nodes || []), JSON.stringify(edges || []), now, now);
+
+    const row = db.prepare('SELECT * FROM workflows WHERE id = ?').get(id);
+    res.status(201).json(parseWorkflow(row));
   } catch (err) {
     console.error('POST /workflows error:', err);
     res.status(500).json({ error: 'Failed to create workflow' });
@@ -53,20 +62,21 @@ router.post('/workflows', async (req, res) => {
 });
 
 // PUT /api/workflows/:id — update an existing workflow
-router.put('/workflows/:id', async (req, res) => {
+router.put('/workflows/:id', (req, res) => {
   try {
     const { name, nodes, edges } = req.body;
-    const { rows } = await pool.query(
-      `UPDATE workflows
-       SET name = $1, nodes = $2, edges = $3, updated_at = NOW()
-       WHERE id = $4
-       RETURNING id, name, nodes, edges, created_at, updated_at`,
-      [name, JSON.stringify(nodes || []), JSON.stringify(edges || []), req.params.id],
-    );
-    if (rows.length === 0) {
+    const now = new Date().toISOString();
+
+    const result = db.prepare(
+      `UPDATE workflows SET name = ?, nodes = ?, edges = ?, updated_at = ? WHERE id = ?`,
+    ).run(name, JSON.stringify(nodes || []), JSON.stringify(edges || []), now, req.params.id);
+
+    if (result.changes === 0) {
       return res.status(404).json({ error: 'Workflow not found' });
     }
-    res.json(rows[0]);
+
+    const row = db.prepare('SELECT * FROM workflows WHERE id = ?').get(req.params.id);
+    res.json(parseWorkflow(row));
   } catch (err) {
     console.error('PUT /workflows/:id error:', err);
     res.status(500).json({ error: 'Failed to update workflow' });
@@ -74,10 +84,10 @@ router.put('/workflows/:id', async (req, res) => {
 });
 
 // DELETE /api/workflows/:id — delete a workflow
-router.delete('/workflows/:id', async (req, res) => {
+router.delete('/workflows/:id', (req, res) => {
   try {
-    const { rowCount } = await pool.query('DELETE FROM workflows WHERE id = $1', [req.params.id]);
-    if (rowCount === 0) {
+    const result = db.prepare('DELETE FROM workflows WHERE id = ?').run(req.params.id);
+    if (result.changes === 0) {
       return res.status(404).json({ error: 'Workflow not found' });
     }
     res.json({ message: 'Workflow deleted' });

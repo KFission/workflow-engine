@@ -15,13 +15,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-migrate()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Failed to run migrations:', err);
-    process.exit(1);
-  });
+migrate();
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});

@@ -1,14 +1,14 @@
-import pool from './db.js';
+import db from './db.js';
 
-export async function migrate() {
-  await pool.query(`
+export function migrate() {
+  db.exec(`
     CREATE TABLE IF NOT EXISTS workflows (
-      id UUID PRIMARY KEY,
-      name VARCHAR(255) NOT NULL DEFAULT 'Untitled Workflow',
-      nodes JSONB NOT NULL DEFAULT '[]'::jsonb,
-      edges JSONB NOT NULL DEFAULT '[]'::jsonb,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL DEFAULT 'Untitled Workflow',
+      nodes TEXT NOT NULL DEFAULT '[]',
+      edges TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
 
